@@ -1,0 +1,221 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+mydataset = pd.read_csv('zomato.csv')
+
+mydataset
+
+mydataset.drop(["url","address","online_order","book_table","votes","phone","location","rest_type","dish_liked","cuisines","approx_cost(for two people)","menu_item","listed_in(type)","rate","name","listed_in(city)\
+"], axis=1, inplace=True)
+
+mydataset
+
+for i in range(0,51717):
+  if(mydataset['reviews_list'][i]=='[]'):
+    mydataset.drop(i, inplace=True)
+
+mydataset.reset_index(inplace=True)
+
+mydataset.drop("index", inplace=True, axis=1)
+
+review=[]
+for i in range(0, 44122):
+  r=[]
+  r1=mydataset['reviews_list'][i]
+  r=r1.split(")")
+  del r[-1]
+  review.extend(r)
+  
+ 
+import re
+
+for i in range(len(review)):
+  s=review[i]
+  m=re.search("RATED",s)
+  if(m):
+    s=s[(m.end()+4):]
+  
+  s=re.sub("(n\'t)|(\w+nt)"," not",s)
+  s=re.sub("(\'ve)"," have",s)
+  s=re.sub("(\'s)"," is",s)
+  s=re.sub("(\'m)"," am",s)
+  s=re.sub("\\\\n","  ",s)
+  s=re.sub(".\\\\.","  ",s)
+  s=re.sub("\\\\.","  ",s)
+  s=re.sub("\\\\x","  ",s)
+  s=re.sub("x8","  ",s)
+  s=re.sub('[^a-zA-Z]',' ',s)
+
+  review[i]=s
+
+while '' in review:
+    review.remove('')
+	
+from pandas import DataFrame
+
+df = DataFrame (review,columns=['reviews'])
+  
+import nltk
+
+nltk.download('vader_lexicon')
+
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+
+sia = SentimentIntensityAnalyzer()
+
+df['scores']=df['reviews'].apply(lambda reviews : sia.polarity_scores(reviews))
+
+df['compound']=df['scores'].apply(lambda score_dict : score_dict['compound'])
+
+lbl=[]
+for i in range(1533313):
+  l=df.loc[i]['scores']
+  del l['compound']
+  lbl.extend(l)
+  
+l2=df.loc[1533312]['scores']
+l2
+
+m=max(l2,key=l2.get)
+print(m)
+
+df['label']=df['scores'].apply(lambda c : max(c,key=c.get))
+
+mydataset2=df
+
+df2=mydataset2.drop(["scores","compound"],axis=1)
+
+df2.to_csv("zomato1533313_dataset")
+
+sampleData=df2[0:50000]
+
+sampleData
+
+sampleData['label'].value_counts()
+
+sampleData.to_csv("zomato50000_dataset.csv")
+
+import re
+import nltk
+
+nltk.download('stopwords')
+from nltk.corpus import stopwords
+from nltk.stem import PorterStemmer
+
+c=[]
+for i in range(0,50000):
+    review = re.sub('[^a-zA-Z]', ' ', sampleData['reviews'][i])
+    review=review.lower()
+    review=review.split()
+    review = [word for word in review if not word in set(stopwords.words('english'))]
+    
+    #applystemming concept
+    ps = PorterStemmer()
+    review = [ps.stem(word) for word in review if not word in set(stopwords.words('english'))]
+    # we use same line as there may be word left which are stopword
+    review=' '.join(review)
+    c.append(review)
+
+
+
+labels=[]
+for i in range(0,50000):
+    review = re.sub('[^a-zA-Z]', ' ', sampleData['label'][i])
+    labels.append(review)
+
+
+import csv
+with open('zomato50000_reviews.csv', 'w') as myfile:
+  wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
+  wr.writerow(c)
+  
+  
+import csv
+with open('zomato50000_labels.csv', 'w') as myfile:
+  wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
+  wr.writerow(labels)
+
+import csv
+with open('zomato50000_dataset.csv', 'w') as myfile:
+  wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
+  wr.writerow(sampleData)  
+
+from sklearn.feature_extraction.text import CountVectorizer
+
+cv = CountVectorizer(max_features=1500)
+x=cv.fit_transform(c).toarray()
+
+y=sampleData.iloc[:,-1].values
+
+from sklearn.preprocessing import LabelEncoder
+lb=LabelEncoder()
+
+y=lb.fit_transform(y)
+
+from sklearn.model_selection import train_test_split
+
+x_train,x_test,y_train,y_test = train_test_split(x,y,test_size=0.2, random_state=0)
+
+import keras 
+from keras.models import Sequential
+from keras.layers import Dense
+
+model = Sequential()
+model.add(Dense(input_dim=1500, init="random_uniform", activation='sigmoid',output_dim=3000))
+model.add(Dense(output_dim=3000, init="random_uniform", activation='sigmoid'))
+model.add(Dense(output_dim=3, init="random_uniform", activation='softmax'))
+model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+model.fit(x_train,y_train, epochs=10, batch_size=10)
+
+y_pred=model.predict(x_test)
+y_pred=y_pred.all()
+model.save("NLPmodel.h5")
+
+import pickle
+
+filename = 'nlp_zomato_model.pkl'
+pickle.dump(model, open(filename, 'wb'))
+
+ 
+pickle.dump(cv, open('cv_tranform.pkl', 'wb'))
+
+s= " It is amazing. never had this type of food"
+s=re.sub("(n\'t)|(\w+nt)"," not",s)
+s=re.sub("(\'ve)"," have",s)
+s=re.sub("(\'s)"," is",s)
+s=re.sub("(\'m)"," am",s)
+s=re.sub("\\\\n","  ",s)
+s=re.sub(".\\\\.","  ",s)
+s=re.sub("\\\\.","  ",s)
+s=re.sub("\\\\x","  ",s)
+s=re.sub("x8","  ",s)
+s=re.sub('[^a-zA-Z]',' ',s)
+s=s.lower()
+s=s.split()
+s = [word for word in s if not word in set(stopwords.words('english'))]
+ps = PorterStemmer()
+s = [ps.stem(word) for word in s if not word in set(stopwords.words('english'))]
+s=' '.join(s)
+
+t=[]
+t.append(s)
+x1=cv.fit_transform(t).toarray()
+x1
+
+from keras.preprocessing import sequence
+x1 = sequence.pad_sequences(x1, maxlen=1500)
+
+c1=model.predict_classes(x1)
+
+0** ==> **Negative 1** ==> **Positive 2** ==> **Neutral
+lb.inverse_transform(c1)
+
+
+
+y = model.predict(cv.transform([c1]))
+
+
+
+
+
